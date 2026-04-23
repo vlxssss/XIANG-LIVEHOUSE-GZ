@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>520心动挑战·響LIVEHOUSE</title>
+    <!-- 引入 3D 渲染引擎 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            /* 【调节此处】网页的主色调（粉色） */
+            --primary-color: #ff4d85;
+            /* 【调节此处】背景基础色（深黑色） */
+            --bg-color: #0d080b;
+            /* 【调节此处】文字发光的强度 */
+            --text-glow: 0 0 15px rgba(255, 77, 133, 0.8);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            /* 【调节此处】电脑端打开时的外围背景渐变颜色 */
+            background: radial-gradient(circle at center, #1a0b12 0%, #050304 100%);
+            color: #ffffff;
+            font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ================= 手机端显示区域容器 ================= */
+        #app-root {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            overflow: hidden;
+        }
+
+        /* 如果是在电脑上打开，强制模拟成手机屏幕的大小和形状 */
+        @media (min-width: 768px) {
+            #app-root {
+                width: 414px; /* 模拟 iPhone Max 宽度 */
+                height: 90vh;
+                max-height: 896px;
+                border-radius: 45px; /* 手机圆角 */
+                box-shadow: 0 0 50px rgba(255, 77, 133, 0.15), 0 0 0 12px #140b0f, 0 20px 60px rgba(0,0,0,0.8);
+            }
+        }
+
+        /* 背景 3D 容器 */
+        #bg-webgl-container {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            /* 【调节此处】背景的模糊程度，数字越大越模糊 */
+            filter: blur(8px) brightness(0.9);
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none; 
+        }
+
+        /* 顶部小标题 */
+        .header-title {
+            position: absolute;
+            top: 6%; /* 【调节此处】距离顶部的距离 */
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            font-size: 0.8rem; /* 【调节此处】字号大小 */
+            letter-spacing: 1px; /* 【调节此处】字间距 */
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: var(--text-glow);
+            opacity: 0;
+            transition: all 1.5s ease 0.5s;
+            white-space: nowrap;
+        }
+        .header-title.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ================= 中间爱心部分 ================= */
+        .pseudo-heart-wrapper {
+            position: absolute;
+            top: 42%; /* 【调节此处】爱心在屏幕中的上下位置，越小越靠上 */
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            z-index: 15; 
+            /* 【调节此处】爱心平时的发光强度 */
+            filter: drop-shadow(0 0 35px rgba(255, 77, 133, 0.8));
+            /* 【联动注意】这里的 0.8s 是恢复粉色的时间，需和下方 JS 的冷却时间对应 */
+            transition: filter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* 爱心点击后的爆发状态 */
+        .pseudo-heart-wrapper.feedback-beat {
+            transform: translate(-50%, -50%) scale(1.15); /* 【调节此处】点击时爱心放大的倍数 */
+            filter: drop-shadow(0 0 60px rgba(255, 77, 133, 1)); /* 【调节此处】点击时发光的强度 */
+            transition: filter 0.1s ease-out, transform 0.1s ease-out; 
+        }
+
+        .pseudo-heart-inner {
+            width: 220px; /* 【调节此处】爱心的宽度 */
+            height: 220px; /* 【调节此处】爱心的高度 */
+            /* 爱心的渐变质感 */
+            background: radial-gradient(circle at 35% 35%, #ffd1df 0%, #ff4d85 40%, #8a0028 100%);
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/%3E%3C/svg%3E");
+            -webkit-mask-size: 100% 100%;
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/%3E%3C/svg%3E");
+            mask-size: 100% 100%;
+            /* 基础呼吸动画 */
+            animation: pseudo-heartbeat 1.8s ease-in-out infinite;
+        }
+
+        /* 刚进入页面时，爱心的猛烈悸动动画 */
+        .pseudo-heart-wrapper.intro-beat .pseudo-heart-inner {
+            animation: intro-heartbeat 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+        }
+
+        /* 动画定义：普通呼吸 */
+        @keyframes pseudo-heartbeat {
+            0%, 100% { transform: scale(1); }
+            15% { transform: scale(1.06); }
+            30% { transform: scale(1); }
+            45% { transform: scale(1.06); }
+        }
+        /* 动画定义：刚入场时的猛烈跳动 */
+        @keyframes intro-heartbeat {
+            0%, 100% { transform: scale(1); }
+            15% { transform: scale(1.15); }
+            30% { transform: scale(1); }
+            45% { transform: scale(1.15); }
+        }
+        /* 动画定义：点击定格后的高频心跳 */
+        @keyframes pseudo-heartbeat-fast {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        /* 迷雾遮罩层 */
+        #intro-layer {
+            position: absolute;
+            inset: 0;
+            background: rgba(13, 8, 11, 0.8);
+            backdrop-filter: blur(30px);
+            z-index: 50;
+            transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto;
+        }
+
+        /* 中间跳动的数字 */
+        .number-display {
+            position: absolute;
+            top: 42%; /* 【调节此处】数字的上下位置，需跟爱心保持一致 */
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5.5rem; /* 【调节此处】数字的大小 */
+            font-weight: 300; /* 【调节此处】数字的粗细 */
+            letter-spacing: 4px;
+            font-variant-numeric: tabular-nums;
+            color: #fff;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 255, 255, 0.9);
+            opacity: 0; 
+            transition: opacity 1s;
+            z-index: 20;
+        }
+
+        /* 文字反馈区域容器 */
+        .feedback-area {
+            position: absolute;
+            top: 61%; /* 【调节此处】文字整体区域的上下位置 */
+            left: 50%;
+            transform: translateX(-50%); 
+            width: 90%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        /* 主语录文字（愛，自有回響） */
+        .core-quote {
+            font-size: 28px; /* 【调节此处】主文字的大小 */
+            font-weight: 900; /* 【调节此处】主文字的粗细，900最粗 */
+            color: var(--primary-color);
+            text-shadow: 0 0 20px rgba(255, 77, 133, 0.9), 0 2px 5px rgba(0,0,0,0.5); 
+            margin-bottom: 18px; /* 【调节此处】与下方频谱的距离 */
+            letter-spacing: 2px;
+            min-height: 34px;
+            animation: float-up 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+
+        /* 频谱下方的第一段小字 */
+        .feedback-sub {
+            font-size: 1.25rem; /* 【调节此处】大小 */
+            font-weight: 700; /* 【调节此处】粗细 */
+            color: #ffffff;
+            letter-spacing: 1px;
+            margin-top: 12px; 
+            animation: float-up 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s backwards;
+        }
+
+        /* 多少用户同频的极小字 */
+        .companion-text {
+            font-size: 0.8rem; /* 【调节此处】大小，建议跟顶部对齐 */
+            color: rgba(255, 255, 255, 0.4); 
+            margin-top: 6px; /* 【调节此处】距离上一段文字的空隙 */
+            letter-spacing: 0px; 
+            animation: float-up 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s backwards;
+        }
+
+        /* 52次/520次彩蛋文字 */
+        .hidden-text {
+            font-size: 0.8rem;
+            color: #ffb6c1;
+            margin-top: 8px;
+            font-style: italic;
+            opacity: 0.9;
+            animation: float-up 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s backwards;
+        }
+
+        /* 文字浮现动画 */
+        @keyframes float-up {
+            from { opacity: 0; transform: translateY(12px); filter: blur(3px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0px); }
+        }
+
+        /* ================= 频谱条部分 ================= */
+        .spectrum-container {
+            display: flex;
+            align-items: center; 
+            justify-content: center;
+            gap: 5px; /* 【调节此处】每根频谱之间的距离 */
+            height: 35px; /* 【调节此处】频谱区域的总高度 */
+            opacity: 0;
+            margin-bottom: 5px; 
+            transition: opacity 1s;
+        }
+        
+        .spectrum-bar {
+            width: 3px; /* 【调节此处】每根频谱的粗细 */
+            background: linear-gradient(180deg, #ffb6c1 0%, #ff4d85 100%); 
+            border-radius: 2px;
+            box-shadow: 0 0 6px rgba(255, 77, 133, 0.8);
+            transform: scaleY(1);
+            /* 关键：0.8s 恢复时间 */
+            transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.8s ease;
+            animation: spectrum-breathe 1.5s ease-in-out var(--delay) infinite alternate;
+        }
+
+        /* 频谱爆发时的状态 */
+        .spectrum-container.spiking .spectrum-bar {
+            transform: scaleY(1.8); /* 【调节此处】爆发时长高的倍率 */
+            box-shadow: 0 0 15px rgba(255, 77, 133, 1); 
+            animation-duration: 0.22s; /* 【调节此处】爆发时抖动的速度 */
+            transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+        }
+
+        @keyframes spectrum-breathe {
+            0% { height: 4px; opacity: 0.4; }
+            100% { height: var(--normal-h); opacity: 0.9; }
+        }
+
+        /* ================= 按钮部分 ================= */
+        .btn-wrapper {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 50%; /* 初始在中间 */
+            transition: top 2.5s cubic-bezier(0.25, 0.1, 0.25, 1); /* 入场下降速度 */
+            pointer-events: auto;
+            z-index: 60;
+        }
+        
+        /* 按钮下降后的最终位置 */
+        .btn-wrapper.challenge-pos {
+            top: 85%; /* 【调节此处】距离顶部的距离，调大则更靠下 */
+        }
+
+        .btn {
+            background: rgba(255, 77, 133, 0.1);
+            border: 1px solid rgba(255, 77, 133, 0.7);
+            color: #fff;
+            padding: 16px 50px;
+            font-size: 1.05rem;
+            letter-spacing: 3px;
+            border-radius: 40px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 0 15px rgba(255, 77, 133, 0.2);
+            white-space: nowrap;
+            min-width: 200px;
+        }
+
+        /* 冷却进度条 */
+        .btn-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 0%;
+            background: rgba(255, 77, 133, 0.4);
+            z-index: 1;
+        }
+
+        .btn:active { transform: scale(0.95); }
+
+        .btn.disabled {
+            border-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            background: transparent;
+            box-shadow: none;
+        }
+
+        /* 全屏粒子画布 */
+        #particles-canvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-root">
+        <!-- 3D 背景层 -->
+        <div id="bg-webgl-container"></div>   
+
+        <div id="ui-layer">
+            <div class="header-title" id="header-title">【520心动挑战·響LIVEHOUSE】</div>
+            
+            <!-- 平面仿3D爱心 -->
+            <div class="pseudo-heart-wrapper intro-beat" id="pseudo-heart">
+                <div class="pseudo-heart-inner"></div>
+            </div>
+
+            <!-- 数字显示 -->
+            <div class="number-display" id="number-display">0</div>
+            
+            <div class="feedback-area" id="feedback-area">
+                <div class="core-quote" id="core-quote"></div>
+                
+                <!-- 频谱条：这里可以调节每根条的延迟和高度 -->
+                <div class="spectrum-container" id="spectrum">
+                    <div class="spectrum-bar" style="--delay: 0.1s; --normal-h: 16px;"></div>
+                    <div class="spectrum-bar" style="--delay: 0.4s; --normal-h: 22px;"></div>
+                    <div class="spectrum-bar" style="--delay: 0.2s; --normal-h: 14px;"></div>
+                    <div class="spectrum-bar" style="--delay: 0.6s; --normal-h: 26px;"></div>
+                    <div class="spectrum-bar" style="--delay: 0.3s; --normal-h: 18px;"></div>
+                    <div class="spectrum-bar" style="--delay: 0.5s; --normal-h: 20px;"></div>
+                    <div class="spectrum-bar" style="--delay: 0.15s; --normal-h: 15px;"></div>
+                </div>
+                
+                <div id="feedback-details"></div>
+            </div>
+        </div>
+
+        <div id="intro-layer"></div>
+
+        <!-- 唯一操作按钮 -->
+        <div class="btn-wrapper" id="btn-wrapper">
+            <button class="btn" id="btn-main">
+                <div class="btn-progress" id="btn-progress"></div>
+                <span class="btn-text" id="btn-text">唤醒心跳</span>
+            </button>
+        </div>
+
+        <canvas id="particles-canvas"></canvas>
+    </div>
+
+    <script>
+        const appRoot = document.getElementById('app-root'); 
+        const introLayer = document.getElementById('intro-layer');
+        const btnWrapper = document.getElementById('btn-wrapper');
+        const btnMain = document.getElementById('btn-main');
+        const btnText = document.getElementById('btn-text');
+        const btnProgress = document.getElementById('btn-progress');
+        const pseudoHeart = document.getElementById('pseudo-heart'); 
+        const numberDisplay = document.getElementById('number-display');
+        const coreQuote = document.getElementById('core-quote');
+        const feedbackDetails = document.getElementById('feedback-details');
+        const spectrum = document.getElementById('spectrum');
+        const headerTitle = document.getElementById('header-title');
+        
+        /* ================= Web Audio 音频设置 ================= */
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playGentleTone(isSuccess = false) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const playNote = (freq, delay, duration, vol) => {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = 'sine'; // 【调节此处】正弦波最温柔，也可以换成 'triangle'
+                osc.frequency.value = freq; // 【调节此处】数字越大音调越高
+                gainNode.gain.setValueAtTime(0, t + delay);
+                gainNode.gain.linearRampToValueAtTime(vol, t + delay + 0.03); 
+                gainNode.gain.exponentialRampToValueAtTime(0.001, t + delay + duration); 
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                osc.start(t + delay);
+                osc.stop(t + delay + duration);
+            };
+            if (isSuccess) {
+                // 520成功时的和弦
+                playNote(523.25, 0, 2.0, 0.1); 
+                playNote(659.25, 0.1, 2.0, 0.08); 
+                playNote(783.99, 0.2, 2.5, 0.06); 
+            } else {
+                // 普通点击时的叮声
+                playNote(587.33, 0, 1.2, 0.12); 
+            }
+        }
+
+        /* ================= 游戏运行核心逻辑 ================= */
+        let currentState = 'intro'; 
+        let isRolling = false;
+        let rollAnimationId;
+        let attempts = 0;
+        let currentRollValue = 0; 
+        let lastRollTime = 0; 
+
+        // 3D 背景变量
+        let sceneBg, cameraBg, rendererBg;
+        const bgHearts = [];
+        let targetCameraBgZ = 75; // 【调节此处】普通时的背景远近
+        let baseCameraBgZ = 75;
+        let zoomedCameraBgZ = 20; // 【调节此处】点击后背景拉近的程度，越小拉得越近
+
+        // 创建爱心 3D 模型（用于背景）
+        function createHeartGeometry() {
+            const heartShape = new THREE.Shape();
+            const x = 0, y = 0;
+            heartShape.moveTo( x + 5, y + 5 );
+            heartShape.bezierCurveTo( x + 5, y + 5, x + 4, y, x, y );
+            heartShape.bezierCurveTo( x - 6, y, x - 6, y + 7, x - 6, y + 7 );
+            heartShape.bezierCurveTo( x - 6, y + 11, x - 2, y + 15.4, x + 5, y + 19 );
+            heartShape.bezierCurveTo( x + 12, y + 15.4, x + 16, y + 11, x + 16, y + 7 );
+            heartShape.bezierCurveTo( x + 16, y + 7, x + 16, y, x + 10, y );
+            heartShape.bezierCurveTo( x + 7, y, x + 5, y + 5, x + 5, y + 5 );
+            const extrudeSettings = { depth: 2, bevelEnabled: true, bevelSegments: 20, steps: 2, bevelSize: 2, bevelThickness: 2 };
+            const geometry = new THREE.ExtrudeGeometry( heartShape, extrudeSettings );
+            geometry.computeBoundingBox();
+            geometry.translate( -0.5 * ( geometry.boundingBox.max.x - geometry.boundingBox.min.x ), -0.5 * ( geometry.boundingBox.max.y - geometry.boundingBox.min.y ), -1 );
+            return geometry;
+        }
+
+        // 初始化背景
+        function initThreeJS() {
+            const containerBg = document.getElementById('bg-webgl-container');
+            const cw = appRoot.clientWidth;
+            const ch = appRoot.clientHeight;
+            sceneBg = new THREE.Scene();
+            sceneBg.fog = new THREE.FogExp2(0x0d080b, 0.012);
+            cameraBg = new THREE.PerspectiveCamera(45, cw / ch, 1, 200);
+            cameraBg.position.z = baseCameraBgZ;
+            rendererBg = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            rendererBg.setSize(cw, ch);
+            rendererBg.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            containerBg.appendChild(rendererBg.domElement);
+            
+            // 修正灯光设置逻辑：先创建灯光，再设置其位置
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 30);
+            sceneBg.add(dirLight);
+            
+            sceneBg.add(new THREE.AmbientLight(0xffffff, 0.4));
+            const materialBg = new THREE.MeshPhysicalMaterial({ color: 0xff6b9d, metalness: 0.1, roughness: 0.3, transparent: true, opacity: 0.9, emissive: 0x4a0022 });
+            for (let i = 0; i < 50; i++) {
+                const bgMesh = new THREE.Mesh(createHeartGeometry(), materialBg);
+                resetBgHeart(bgMesh, true);
+                sceneBg.add(bgMesh);
+                bgHearts.push(bgMesh);
+            }
+            window.addEventListener('resize', onWindowResize, false);
+            setTimeout(onWindowResize, 100);
+            animateThreeJS();
+        }
+
+        // 重置背景爱心位置
+        function resetBgHeart(mesh, isInit = false) {
+            const scale = Math.random() * 0.3 + 0.1; 
+            mesh.scale.set(scale, scale, scale);
+            mesh.position.z = (Math.random() * -60) - 10; 
+            let posX = (Math.random() - 0.5) * 100;
+            let posY = isInit ? (Math.random() - 0.5) * 80 : -60 - Math.random() * 20;
+            mesh.position.x = posX;
+            mesh.position.y = posY;
+            mesh.rotation.x = Math.PI + (Math.random() - 0.5) * 0.5;
+            mesh.rotation.y = (Math.random() - 0.5) * 1.5;
+            // 【调节此处】0.09 和 0.05 控制背景爱心往上飘的速度
+            mesh.userData = { speedY: Math.random() * 0.09 + 0.05, rotSpeedX: (Math.random() - 0.5) * 0.02, rotSpeedY: (Math.random() - 0.5) * 0.02 };
+        }
+
+        function onWindowResize() {
+            const cw = appRoot.clientWidth;
+            const ch = appRoot.clientHeight;
+            cameraBg.aspect = cw / ch;
+            cameraBg.updateProjectionMatrix();
+            rendererBg.setSize(cw, ch);
+            canvas2d.width = cw; 
+            canvas2d.height = ch;
+        }
+
+        function animateThreeJS() {
+            requestAnimationFrame(animateThreeJS);
+            cameraBg.position.z += (targetCameraBgZ - cameraBg.position.z) * 0.08;
+            bgHearts.forEach(mesh => {
+                const dx = mesh.position.x;
+                const dy = mesh.position.y - 10;
+                // 温柔斥力微风
+                if (Math.abs(dx) < 40 && dy > -30 && dy < 50) { mesh.position.x += (dx >= 0 ? 0.06 : -0.06); }
+                mesh.position.y += mesh.userData.speedY;
+                mesh.rotation.x += mesh.userData.rotSpeedX; 
+                mesh.rotation.y += mesh.userData.rotSpeedY; 
+                if (mesh.position.y > 60) resetBgHeart(mesh, false);
+            });
+            rendererBg.render(sceneBg, cameraBg);
+        }
+
+        window.onload = () => { initThreeJS(); };
+
+        // 数字格式化
+        function formatNumber(num) {
+            return Math.floor(num).toString();
+        }
+
+        // 数字滚动引擎
+        function rollNumbers(timestamp) {
+            if (!isRolling) return;
+            if (!lastRollTime) lastRollTime = timestamp;
+            const delta = timestamp - lastRollTime;
+            lastRollTime = timestamp;
+            // 【调节此处】0.85 控制数字滚动的快慢，数字越大滚得越快
+            currentRollValue += delta * 0.25; 
+            if (currentRollValue >= 1201) currentRollValue %= 1201; 
+            numberDisplay.innerText = formatNumber(currentRollValue); 
+            rollAnimationId = requestAnimationFrame(rollNumbers);
+        }
+
+        // 按钮大总管：负责所有点击逻辑
+        btnMain.addEventListener('click', () => {
+            if (currentState === 'intro') {
+                initAudio(); 
+                currentState = 'animating';
+                introLayer.style.opacity = '0';
+                headerTitle.classList.add('visible');
+                btnWrapper.classList.add('challenge-pos');
+                setTimeout(() => { introLayer.style.display = 'none'; }, 1500);
+                setTimeout(() => {
+                    pseudoHeart.classList.remove('intro-beat'); 
+                    numberDisplay.style.opacity = '1';
+                    spectrum.style.opacity = '1';
+                    startChallenge();
+                }, 2500); 
+            } else if (currentState === 'challenge') {
+                currentState = 'settling';
+                isRolling = false;
+                cancelAnimationFrame(rollAnimationId);
+                let finalNumber = Math.floor(currentRollValue);
+                numberDisplay.innerText = formatNumber(finalNumber);
+                attempts++;
+                playGentleTone(finalNumber === 520);
+                targetCameraBgZ = zoomedCameraBgZ; 
+                btnMain.classList.add('disabled');
+                spectrum.classList.add('spiking');
+                pseudoHeart.classList.add('feedback-beat'); 
+                // 【调节此处】1100 是点击后的“悬念定格时间”（毫秒）
+                setTimeout(() => { handleSettled(finalNumber); }, 1100);
+            } else if (currentState === 'ready') {
+                startChallenge();
+            }
+        });
+
+        // 判定是展示成功还是失败
+        function handleSettled(finalNumber) {
+            if (finalNumber === 520) {
+                fireParticles();
+                // 【调节此处】1500 是成功时心跳狂喷的持续时间（毫秒）
+                setTimeout(() => { showResult(finalNumber); }, 1500);
+            } else {
+                showResult(finalNumber);
+            }
+        }
+
+        // 重新开启挑战
+        function startChallenge() {
+            currentState = 'challenge';
+            isRolling = true;
+            currentRollValue = 0; 
+            lastRollTime = 0; 
+            targetCameraBgZ = baseCameraBgZ;
+            coreQuote.innerText = '';
+            feedbackDetails.innerHTML = '';
+            spectrum.classList.remove('spiking');
+            pseudoHeart.classList.remove('feedback-beat');
+            btnText.innerText = '回应心动';
+            btnMain.classList.remove('disabled');
+            btnProgress.style.transition = 'none';
+            btnProgress.style.width = '0%';
+            rollAnimationId = requestAnimationFrame(rollNumbers);
+        }
+
+        // 显示文字反馈
+        function showResult(finalNumber) {
+            currentState = 'cooling'; 
+            const companionCount = Math.floor(Math.random() * 901); 
+            let htmlDetails = '';
+            spectrum.classList.remove('spiking');
+            pseudoHeart.classList.remove('feedback-beat');
+
+            if (finalNumber === 520) {
+                coreQuote.innerText = '愛，自有回響';
+                htmlDetails = `<div class="feedback-sub">当你认真回应自己，世界也会回应你。</div>`;
+            } else if (finalNumber === 52) {
+                coreQuote.innerText = '这个数字好像也不错，但还差点~';
+                htmlDetails = `<div class="feedback-sub">再等等，也许下一次就是</div>`;
+            } else {
+                // 普通随机文案
+                const comfortTexts = ["有些回应，不一定刚刚好", "这次没抓住，但心跳还在", "数字没对上，心意却没有错", "再试试，也许下一次成功了", "有些心动，需要多试几次", "或许快成了"];
+                const randomText = comfortTexts[Math.floor(Math.random() * comfortTexts.length)];
+                coreQuote.innerText = ''; 
+                htmlDetails = `<div class="feedback-sub">${randomText}</div>`;
+            }
+            htmlDetails += `<div class="companion-text">此刻有 ${companionCount} 位用户与您一起在此数定格</div>`;
+            
+            // 挑战次数彩蛋
+            if (attempts === 52) htmlDetails += `<div class="hidden-text">第 52 次尝试，你没有轻易放弃</div>`;
+            else if (attempts === 520) htmlDetails += `<div class="hidden-text">第 520 次尝试，你已经把520变成了行动</div>`;
+            
+            feedbackDetails.innerHTML = htmlDetails;
+            btnText.innerText = '心跳恢复中…';
+            // 【调节此处】0.8s 控制按钮冷却进度条的速度，需跟上面 CSS 的 0.8s 联动
+            btnProgress.style.transition = 'width 0.8s linear';
+            btnProgress.style.width = '100%';
+            
+            setTimeout(() => {
+                if(currentState === 'cooling') {
+                    currentState = 'ready'; 
+                    btnText.innerText = '再次呼唤';
+                    btnMain.classList.remove('disabled');
+                }
+            }, 800); // 冷却 800 毫秒后解锁
+        }
+
+        /* ================= 成功时的爱心火山喷发粒子 ================= */
+        const canvas2d = document.getElementById('particles-canvas');
+        const ctx = canvas2d.getContext('2d');
+        let particles = [];
+        let pAnimFrame;
+        let isExploding = false; 
+        
+        function fireParticles() { 
+            particles = []; 
+            isExploding = true; 
+            if (!pAnimFrame) animateParticles(); 
+            setTimeout(() => { isExploding = false; }, 1500); 
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
+            let alive = false;
+            if (isExploding) {
+                alive = true;
+                const centerX = canvas2d.width / 2;
+                const centerY = canvas2d.height / 2;
+                // 【调节此处】i < 8 控制每帧喷出多少粒子，越多越密集
+                for (let i = 0; i < 8; i++) { 
+                    particles.push({ 
+                        x: centerX, y: centerY, 
+                        vx: (Math.random() - 0.5) * 26, vy: (Math.random() - 0.5) * 26 - 6, 
+                        size: Math.random() * 7 + 3, color: Math.random() > 0.5 ? '#ff4d85' : '#ffffff', 
+                        life: 1, decay: Math.random() * 0.015 + 0.005, isRibbon: Math.random() > 0.7 
+                    });
+                }
+            }
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                if (p.life > 0) {
+                    alive = true;
+                    p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life -= p.decay;
+                    ctx.globalAlpha = Math.max(0, p.life);
+                    ctx.fillStyle = p.color;
+                    if (p.isRibbon) ctx.fillRect(p.x, p.y, p.size * 2, p.size / 2);
+                    else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+                } else { particles.splice(i, 1); }
+            }
+            if (alive) pAnimFrame = requestAnimationFrame(animateParticles);
+            else { ctx.clearRect(0, 0, canvas2d.width, canvas2d.height); pAnimFrame = null; }
+        }
+    </script>
+</body>
+</html>
